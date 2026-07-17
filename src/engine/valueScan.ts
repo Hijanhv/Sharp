@@ -1,7 +1,7 @@
 // value_scan: price a match, pull/accept a market, and quantify the edge.
 import type { Outcome, ValueLeg, ValueScanInputT } from "../types.js";
 import { priceMatch } from "./pricing.js";
-import { scoreValue } from "../model/value.js";
+import { scoreValue, hedgePlan, type HedgePlan } from "../model/value.js";
 import { searchPolymarket, type PolyMarket } from "../data/polymarket.js";
 import { resolveTeam } from "../data/teams.js";
 
@@ -16,6 +16,7 @@ export interface ValueScanResult {
   };
   legs: ValueLeg[];
   best?: ValueLeg;
+  hedge?: HedgePlan; // equal-payout hedge / arbitrage plan across the outcomes
   note?: string;
 }
 
@@ -78,11 +79,13 @@ export async function runValueScan(input: ValueScanInputT): Promise<ValueScanRes
   }
 
   const legs = Object.keys(decimalOdds).length ? scoreValue(match.probs, decimalOdds, input.kellyCap) : [];
+  const hedge = hedgePlan(decimalOdds) ?? undefined;
   return {
     match,
     market: { source, reference, url, decimalOdds, unmapped },
     legs,
     best: legs[0],
+    hedge,
     note,
   };
 }

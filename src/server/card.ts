@@ -1,32 +1,23 @@
-// In-memory report store + HTML renderer. Each priced result gets a short id and
-// a shareable /r/:id card — the demo surface and the Social-Buzz screenshot engine.
+// Stateless shareable cards. Instead of storing results in memory (which does
+// not survive serverless invocations), the card URL encodes the exact input, so
+// any card is reproducible from its link alone. This works on Vercel and doubles
+// as a verifiable receipt: same link, same numbers.
 import type { ToolKind } from "./tools.js";
 
-interface ReportEntry {
-  kind: ToolKind;
-  data: any;
-  createdAt: number;
+export function encodeCard(kind: ToolKind, input: unknown): string {
+  const json = JSON.stringify({ k: kind, i: input });
+  return Buffer.from(json, "utf8").toString("base64url");
 }
 
-const STORE = new Map<string, ReportEntry>();
-const MAX = 500;
-
-function shortId(): string {
-  return Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3);
-}
-
-export function saveReport(kind: ToolKind, data: unknown): string {
-  const id = shortId();
-  STORE.set(id, { kind, data, createdAt: Date.now() });
-  if (STORE.size > MAX) {
-    const oldest = [...STORE.entries()].sort((a, b) => a[1].createdAt - b[1].createdAt)[0];
-    if (oldest) STORE.delete(oldest[0]);
+export function decodeCard(payload: string): { k: ToolKind; i: unknown } | null {
+  try {
+    const json = Buffer.from(payload, "base64url").toString("utf8");
+    const obj = JSON.parse(json);
+    if (obj && typeof obj.k === "string") return obj;
+    return null;
+  } catch {
+    return null;
   }
-  return id;
-}
-
-export function getReport(id: string): ReportEntry | undefined {
-  return STORE.get(id);
 }
 
 const esc = (s: unknown): string =>
@@ -61,19 +52,19 @@ h1{font-size:20px;margin:0 0 4px}.sub{color:var(--mut);font-size:13px;margin:0 0
 .foot{color:var(--mut);font-size:12px;text-align:center;margin-top:6px}
 a{color:#58a6ff}
 </style></head><body><div class="wrap">
-<div class="brand"><span class="dot"></span>SHARP <small>· fair odds &amp; value edge · OKX.AI</small></div>
+<div class="brand"><span class="dot"></span>SHARP <small>fair odds and value edge on OKX.AI</small></div>
 ${body}
-<p class="foot">Model output for research. Not financial advice. · Powered by Sharp on OKX.AI</p>
+<p class="foot">Model output for research. Not financial advice. Powered by Sharp on OKX.AI</p>
 </div></body></html>`;
 }
 
 function renderFairOdds(m: any): string {
   const p = m.probs;
-  const scores = m.topScores.map((s: any) => `${s.home}–${s.away} <span class="k">(${pct(s.prob)})</span>`).join(" · ");
+  const scores = m.topScores.map((s: any) => `${s.home}-${s.away} <span class="k">(${pct(s.prob)})</span>`).join("  ");
   return shell(`${m.home} vs ${m.away}`, `
 <div class="card">
   <h1>${esc(m.home)} vs ${esc(m.away)}</h1>
-  <p class="sub">${m.neutral ? "Neutral venue" : "Home advantage applied"} · confidence: ${m.confidence} · xG ${m.lambda.home}–${m.lambda.away}</p>
+  <p class="sub">${m.neutral ? "Neutral venue" : "Home advantage applied"} · confidence ${m.confidence} · expected goals ${m.lambda.home} to ${m.lambda.away}</p>
   <div class="bar"><span class="h" style="width:${p.home * 100}%"></span><span class="d" style="width:${p.draw * 100}%"></span><span class="a" style="width:${p.away * 100}%"></span></div>
   <div class="grid">
     <div class="tile"><div class="lab">${esc(m.home)}</div><div class="num">${pct(p.home)}</div><div class="k">${odds(m.fairOdds.home)}</div></div>
@@ -83,7 +74,7 @@ function renderFairOdds(m: any): string {
   <div class="row"><span class="k">Most likely scores</span><span class="v">${scores}</span></div>
   <div class="row"><span class="k">Both teams to score</span><span class="v">${pct(m.bttsProb)}</span></div>
   <div class="row"><span class="k">Over 2.5 goals</span><span class="v">${pct(m.over25Prob)}</span></div>
-  <div class="row"><span class="k">Sum check</span><span class="v" style="color:var(--acc)">${pct(p.home + p.draw + p.away)} ✓</span></div>
+  <div class="row"><span class="k">Sum check</span><span class="v" style="color:var(--acc)">${pct(p.home + p.draw + p.away)}</span></div>
 </div>`);
 }
 
@@ -98,25 +89,29 @@ function renderValueScan(r: any): string {
   const legs = r.legs.map(legRow).join("");
   const src = r.market.reference ? `${esc(r.market.source)} · ${esc(r.market.reference)}` : esc(r.market.source);
   const headline = best
-    ? `${esc(best.label)}: <span style="color:${best.edgePct >= 3 ? "var(--acc)" : "var(--mut)"}">${best.edgePct >= 0 ? "+" : ""}${best.edgePct.toFixed(1)}% edge</span>`
-    : "No market odds mapped";
-  return shell(`Value · ${m.home} vs ${m.away}`, `
+    ? `${esc(best.label)} <span style="color:${best.edgePct >= 3 ? "var(--acc)" : "var(--mut)"}">${best.edgePct >= 0 ? "+" : ""}${best.edgePct.toFixed(1)}%</span>`
+    : "no market mapped";
+  const hedge = r.hedge
+    ? `<div class="row"><span class="k">Hedge (equal payout)</span><span class="v" style="color:${r.hedge.isArbitrage ? "var(--acc)" : "var(--mut)"}">${r.hedge.isArbitrage ? "arbitrage " : "locks "} ${r.hedge.guaranteedRoiPct >= 0 ? "+" : ""}${r.hedge.guaranteedRoiPct}%</span></div>`
+    : "";
+  return shell(`Value: ${m.home} vs ${m.away}`, `
 <div class="card">
   <h1>${esc(m.home)} vs ${esc(m.away)}</h1>
-  <p class="sub">Model vs market · ${src}${r.market.url ? ` · <a href="${esc(r.market.url)}">market ↗</a>` : ""}</p>
+  <p class="sub">Model vs market · ${src}${r.market.url ? ` · <a href="${esc(r.market.url)}">market</a>` : ""}</p>
   <div class="grid">
-    <div class="tile"><div class="lab">Model (fair)</div><div class="num">${pct(m.probs.home)}/${pct(m.probs.draw)}/${pct(m.probs.away)}</div></div>
+    <div class="tile"><div class="lab">Model fair</div><div class="num">${pct(m.probs.home)} / ${pct(m.probs.draw)} / ${pct(m.probs.away)}</div></div>
     <div class="tile"><div class="lab">Best edge</div><div class="num">${headline}</div></div>
     <div class="tile"><div class="lab">Confidence</div><div class="num">${m.confidence}</div></div>
   </div>
-  ${legs || `<p class="sub">${esc(r.note ?? "Provide decimalOdds or prices to score value.")}</p>`}
+  ${legs || `<p class="sub">${esc(r.note ?? "Provide decimal odds or prices to score value.")}</p>`}
+  ${hedge}
 </div>`);
 }
 
 function renderSlip(r: any): string {
   const legs = r.legs
     .map(
-      (l: any) => `<div class="row"><span class="k">${esc(l.home)} v ${esc(l.away)} — ${esc(l.label)}</span>
+      (l: any) => `<div class="row"><span class="k">${esc(l.home)} v ${esc(l.away)}, ${esc(l.label)}</span>
     <span class="v">${odds(l.decimalOdds)} · +${l.edgePct.toFixed(1)}%</span></div>`,
     )
     .join("");
@@ -138,8 +133,8 @@ function renderSlip(r: any): string {
 </div>`);
 }
 
-export function renderReport(entry: ReportEntry): string {
-  if (entry.kind === "fair_odds") return renderFairOdds(entry.data);
-  if (entry.kind === "value_scan") return renderValueScan(entry.data);
-  return renderSlip(entry.data);
+export function renderCard(kind: ToolKind, data: unknown): string {
+  if (kind === "fair_odds") return renderFairOdds(data);
+  if (kind === "value_scan") return renderValueScan(data);
+  return renderSlip(data);
 }

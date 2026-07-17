@@ -38,6 +38,43 @@ export function kelly(modelProb: number, decimalOdds: number): number {
   return Math.max(0, f);
 }
 
+export interface HedgePlan {
+  bookSum: number; // k = sum(1/decimalOdds) across outcomes (the overround)
+  isArbitrage: boolean; // k < 1 => a locked, risk-free profit exists
+  guaranteedRoiPct: number; // return on total stake if you split for equal payout
+  stakeSplit: Partial<Record<Outcome, number>>; // fraction of total stake per outcome
+}
+
+/**
+ * Equal-payout hedge across the market's outcomes.
+ *
+ * If you split a total stake so stake_i = (1/O_i)/k of it (k = sum of 1/O_i),
+ * every outcome pays the same amount, T/k. The return is therefore locked at
+ * (1/k - 1): positive when k < 1 (a genuine arbitrage) and negative otherwise
+ * (the cost of removing all variance). This is the hedging/arb leg of Sharp:
+ * value + Kelly grow the bankroll; the hedge quantifies how to lock a result.
+ */
+export function hedgePlan(marketDecimal: Partial<Record<Outcome, number>>): HedgePlan | null {
+  const entries = (Object.entries(marketDecimal) as [Outcome, number][]).filter(
+    ([, o]) => typeof o === "number" && o > 1,
+  );
+  if (entries.length < 2) return null;
+  const k = entries.reduce((s, [, o]) => s + 1 / o, 0);
+  const stakeSplit: Partial<Record<Outcome, number>> = {};
+  for (const [o, dec] of entries) stakeSplit[o] = round(1 / dec / k, 4);
+  return {
+    bookSum: round(k, 4),
+    isArbitrage: k < 1,
+    guaranteedRoiPct: round((1 / k - 1) * 100, 2),
+    stakeSplit,
+  };
+}
+
+const round = (x: number, n = 4): number => {
+  const f = 10 ** n;
+  return Math.round(x * f) / f;
+};
+
 function verdictFor(edgePct: number): ValueLeg["verdict"] {
   if (edgePct >= 8) return "strong-value";
   if (edgePct >= 3) return "value";

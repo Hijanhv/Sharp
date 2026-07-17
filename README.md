@@ -1,50 +1,109 @@
-# Sharp — the fair-odds & value-edge agent for OKX.AI
+# Sharp
 
-> **We don't guess scores. We price the market — and our probabilities actually add up to 100%.**
+Fair odds and value edge for football and prediction markets, delivered as an Agent Service Provider (A2MCP) on [OKX.AI](https://www.okx.ai). Sharp prices a match with a calibrated statistical model, compares that price to the live market, and reports where the market is wrong. It returns fair probabilities, a value edge, a Kelly stake, and a hedge plan. Built for the [OKX.AI Genesis Hackathon](https://www.hackquest.io/hackathons/OKXAI-Genesis-Hackathon).
 
-**Sharp** is an [OKX.AI](https://www.okx.ai) **Agent Service Provider (A2MCP)** in the **Finance** category. Give it a football match (or any prediction market) and it returns **calibrated fair odds**, the **live market price**, the **value edge %**, and a **Kelly stake** — with a shareable report card. It's built for the [OKX.AI Genesis Hackathon](https://www.hackquest.io/hackathons/OKXAI-Genesis-Hackathon).
+## The problem
 
-The engine is a proper **Dixon-Coles bivariate Poisson** model (the standard in football betting research), with strict probability **normalization to 100%** — directly fixing the top complaint reviewers left on the current market leader, whose win/draw/win probabilities sum to *125%*. Odds and edge are **pure deterministic functions**; an LLM is never allowed to invent a number.
+Prediction agents on marketplaces and betting markets usually do one of two things, and both are weak:
 
-## Why it wins
-- **Finance Copilot track** (3 winners) + eligible for Revenue Rocket / Best Product / Social Buzz from one build.
-- **Proven demand:** the incumbent World Cup ASP has 174 sales and 76 reviews — Sharp targets the same demand with a *calibrated* model and a real edge number.
-- **Rides the featured 🔥 World Cup lane** through the July 19 final, but the engine prices **any Polymarket market**, so it survives the tournament.
-- **OKX-native:** MCP + x402 pay-per-call on **X Layer**, discoverable and callable by other agents.
+1. They guess an outcome or a scoreline, often inventing numbers with no model behind them.
+2. They output probabilities that are not calibrated. The most-sold World Cup agent on OKX.AI has reviews pointing out that its win, draw, and loss probabilities add up to 125 percent.
 
-## Services (A2MCP tools)
-| Tool | Endpoint | Price | Returns |
-| --- | --- | --- | --- |
-| `fair_odds` | `POST /fair-odds` | 0.02 USDT | normalized P(home/draw/away) + fair decimal odds + top-3 correct scores |
-| `value_scan` | `POST /value-scan` | 0.10 USDT | model vs live market → **edge %**, expected value, Kelly stake, verdict |
-| `slip_builder` | `POST /slip` | 0.25 USDT | best value legs across today's slate + combined edge + shareable card URL |
+A probability set that does not sum to 100 percent cannot be trusted to price anything, and a raw prediction does not tell you whether the market price is a good deal. Users and other agents are left without a number they can size a decision on.
 
-All three are also exposed over MCP at `POST /mcp` (JSON-RPC 2.0) and rendered as a shareable card at `GET /r/:id`.
+## What Sharp does and why it matters
 
-## Quick start
-```bash
-npm install
-cp .env.example .env      # PAYMENT_MODE=off ships free + live-ready
-npm test                  # deterministic model tests
-npm start                 # serves on http://localhost:8787
+Sharp turns "who will win" into "what is it worth, and where is the market wrong." For any match or market it returns:
+
+- Calibrated home, draw, and away probabilities that always sum to 100 percent.
+- The fair decimal odds and the three most likely scorelines.
+- The value edge against the live market price, plus the expected value.
+- A Kelly stake sized for growth with a variance cap.
+- A hedge plan that shows how to lock a result, and flags an arbitrage when one exists.
+
+Because it runs as an A2MCP service, any agent on OKX.AI can call Sharp before it places or prices a bet, and pay per call over x402 on X Layer. The output is deterministic and reproducible: the same inputs give the same numbers, and every shareable card can be regenerated from its link. That makes Sharp a pricing primitive other agents can build on, not a one-off chatbot answer.
+
+## Architecture
+
+```mermaid
+flowchart TD
+  U[Agent or user on OKX.AI] -->|MCP JSON-RPC or REST| S[Fastify server]
+  S --> G{x402 payment gate}
+  G -.->|no payment: 402 challenge| X[X Layer USDT0 settlement]
+  G -->|free mode or paid| R[Tool registry]
+
+  R --> T1[fair_odds]
+  R --> T2[value_scan]
+  R --> T3[slip_builder]
+
+  T1 --> M[Dixon-Coles engine]
+  T2 --> M
+  T3 --> T2
+  M --> D[Team ratings prior]
+
+  T2 --> P[Polymarket client]
+  T2 --> V[Value, Kelly and hedge math]
+
+  S --> C[Stateless card at /c/:payload]
+
+  classDef core fill:#14324a,stroke:#3fb950,color:#e6edf3;
+  class M,V core;
 ```
 
-Try it:
+Everything runs as a single service. Deterministic math (the model, the value and hedge calculations) is separated from I/O (the server, the Polymarket client). Cards are stateless, so the whole thing runs on serverless without shared memory.
+
+## The quant strategy
+
+Sharp is built from four standard quantitative methods, each implemented as pure functions and covered by tests.
+
+**1. Calibrated pricing (Dixon-Coles).** Team attack and defense ratings produce expected goals for each side. A bivariate Poisson score matrix is built up to ten goals per team, with the Dixon-Coles correction for the dependence between low scores. The matrix is renormalized so the outcome probabilities sum to exactly 1. This is why Sharp's probabilities always total 100 percent.
+
+**2. Value detection (de-vig and edge).** Market decimal odds are converted to implied prices and de-vigged (scaled so they sum to 1) to recover the market's fair probability. The edge is how much more likely Sharp's model thinks an outcome is than the price you pay implies. Only positive-edge outcomes are worth backing.
+
+**3. Position sizing (fractional Kelly).** Stakes use the Kelly criterion, `f = (b·p - q) / b`, which maximizes long-run growth. Sharp caps it at quarter Kelly by default and clamps any no-edge bet to zero, so sizing stays disciplined and drawdowns stay bounded.
+
+**4. Hedging and arbitrage.** Given the odds across all outcomes, Sharp computes the equal-payout split: stake each outcome in proportion to `1/odds`. Every outcome then returns the same amount. The locked return is `1/k - 1`, where `k` is the sum of `1/odds` across outcomes. When `k` is below 1 this is a genuine arbitrage with a guaranteed profit; when it is above 1 the number tells you the cost of removing all variance. For parlays, the combined edge assumes leg independence and Sharp says so, because correlated legs inflate it.
+
+Full detail is in [docs/METHODOLOGY.md](docs/METHODOLOGY.md).
+
+## Services
+
+| Tool | Endpoint | Price | Returns |
+| --- | --- | --- | --- |
+| `fair_odds` | `POST /fair-odds` | 0.02 USDT | Calibrated probabilities, fair odds, top three scores |
+| `value_scan` | `POST /value-scan` | 0.10 USDT | Edge, expected value, Kelly stake, hedge plan, verdict |
+| `slip_builder` | `POST /slip` | 0.25 USDT | Best value legs across a slate, combined edge |
+
+All three are also exposed over MCP at `POST /mcp` and rendered as a shareable card at `GET /c/:payload`.
+
+## Quick start
+
+```bash
+npm install
+cp .env.example .env
+npm test
+npm start
+```
+
 ```bash
 curl -s -X POST localhost:8787/fair-odds \
   -H 'content-type: application/json' \
-  -d '{"home":"Argentina","away":"France"}' | jq
+  -d '{"home":"Argentina","away":"France"}'
 ```
 
-## Going live on OKX.AI (A2MCP)
-1. In your agent (Claude Code / OpenClaw), install OKX skills: `npx skills add okx/onchainos-skills --yes -g`, then log into your **Agentic Wallet** with your email.
-2. Deploy Sharp to a public HTTPS URL, set `PUBLIC_BASE_URL`.
-3. Register each service and list the ASP (`Help me register an A2MCP ASP on OKX.AI …`). Free mode goes live immediately; flip `PAYMENT_MODE=x402` with your `PAYMENT_PAY_TO` to earn.
-4. Self-check: `curl -i -X POST <url>/fair-odds` → `200` (free) or `402` + `PAYMENT-REQUIRED` (x402).
+## Deploy
 
-See [`docs/okx-submission-kit.md`](docs/okx-submission-kit.md) for the listing fields, #OKXAI post, and 90-second demo script.
+The repo is configured for Vercel (`vercel.json` plus a serverless entry at `api/index.ts`) and connected to this GitHub repository, so every push to `main` deploys automatically. The public URL is detected from Vercel's environment, so no manual URL configuration is needed. `PAYMENT_MODE` defaults to `off`, which serves every tool for free and lets the service go live immediately.
 
-## How the model works
-See [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). In short: team attack/defense ratings → Dixon-Coles adjusted score matrix → outcome probabilities (renormalized) → fair odds → compared against de-vigged market prices for the edge and Kelly fraction. Transparent, reproducible, and calibratable.
+## Going live on OKX.AI
 
-MIT © Hijanhv
+1. In your agent, run `npx skills add okx/onchainos-skills --yes -g`, then log into the Agentic Wallet with your email. That wallet is your X Layer identity and receiving address.
+2. Register each service and list the ASP. In free mode it goes live right away.
+3. To charge, set `PAYMENT_MODE=x402` and `PAYMENT_PAY_TO` to your X Layer address. Paid calls then return an x402 challenge and settle in USDT0.
+4. Verify with `curl -i -X POST <url>/fair-odds`, which returns 200 with a result in free mode or 402 with a `PAYMENT-REQUIRED` header in x402 mode. Or run `npm run selfcheck`.
+
+Listing fields, the participation post, and a 90-second demo script are in [docs/okx-submission-kit.md](docs/okx-submission-kit.md).
+
+## License
+
+MIT

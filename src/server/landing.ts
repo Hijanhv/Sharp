@@ -1,5 +1,5 @@
 // Landing / live-demo page served at GET /. Self-contained (inline CSS+JS) so it
-// works anywhere and screenshots cleanly for the #OKXAI post.
+// works anywhere and screenshots cleanly for the participation post.
 import type { AppConfig } from "../config.js";
 import type { ToolDef } from "./tools.js";
 
@@ -11,7 +11,7 @@ export function landingPage(cfg: AppConfig, tools: ToolDef[]): string {
     .join("");
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sharp · fair odds &amp; value edge · OKX.AI</title>
+<title>Sharp: fair odds and value edge on OKX.AI</title>
 <style>
 :root{--bg:#0b0e14;--card:#141924;--fg:#e6edf3;--mut:#8b98a9;--line:#232a37;--acc:#3fb950}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
@@ -29,14 +29,16 @@ input{background:#0d1017;border:1px solid var(--line);color:var(--fg);border-rad
 button{background:var(--acc);color:#04140a;border:0;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer}
 pre{background:#0d1017;border:1px solid var(--line);border-radius:12px;padding:14px;overflow:auto;font-size:13px;max-height:340px}
 .badge{display:inline-block;background:rgba(63,185,80,.12);color:var(--acc);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.step{background:#1b2230;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13px}
+.arrow{color:var(--mut)}
 a{color:#58a6ff}.foot{color:var(--mut);font-size:12px;margin-top:26px}
 </style></head><body><div class="wrap">
 <div class="brand"><span class="dot"></span>SHARP</div>
-<p class="tag">The fair-odds &amp; value-edge agent for OKX.AI. <span class="badge">Finance</span> Mode: <b>${cfg.payment.mode}</b> · X Layer settlement</p>
+<p class="tag">Fair odds and value edge for football and prediction markets on OKX.AI. <span class="badge">Finance</span> Payment mode: <b>${cfg.payment.mode}</b>. Settles on X Layer.</p>
 
 <div class="card">
-<b>We don't guess scores. We price the market</b> — and our probabilities always sum to 100%.
-Sharp runs a Dixon-Coles model, compares it to live prediction-market prices, and returns the edge and a Kelly stake.
+Sharp prices a match with a calibrated statistical model (Dixon-Coles), compares that price to the live market, and reports where the market is wrong. It returns the fair probabilities, the value edge, a Kelly stake, and a hedge plan. The probabilities always sum to 100%.
 </div>
 
 <h2>Try it live</h2>
@@ -44,9 +46,21 @@ Sharp runs a Dixon-Coles model, compares it to live prediction-market prices, an
   <div class="try">
     <input id="home" value="Argentina" placeholder="Home team">
     <input id="away" value="France" placeholder="Away team">
-    <button onclick="run()">Get fair odds →</button>
+    <button onclick="run()">Get fair odds</button>
   </div>
   <pre id="out">// result appears here</pre>
+</div>
+
+<h2>How it works</h2>
+<div class="card">
+  <div class="flow">
+    <span class="step">Team ratings</span><span class="arrow">&rarr;</span>
+    <span class="step">Expected goals</span><span class="arrow">&rarr;</span>
+    <span class="step">Dixon-Coles score matrix</span><span class="arrow">&rarr;</span>
+    <span class="step">Fair probabilities (sum 100%)</span><span class="arrow">&rarr;</span>
+    <span class="step">De-vig market</span><span class="arrow">&rarr;</span>
+    <span class="step">Edge, Kelly, hedge</span>
+  </div>
 </div>
 
 <h2>Services</h2>
@@ -54,19 +68,18 @@ Sharp runs a Dixon-Coles model, compares it to live prediction-market prices, an
 <tr><th>Tool</th><th>Title</th><th class="r">Price</th><th>Endpoint</th></tr>
 ${rows}
 </table>
-<p style="color:var(--mut);font-size:13px;margin:12px 0 0">MCP endpoint: <code>POST /mcp</code> · Manifest: <a href="/services">/services</a></p>
+<p style="color:var(--mut);font-size:13px;margin:12px 0 0">MCP endpoint: <code>POST /mcp</code>. Manifest: <a href="/services">/services</a>.</p>
 </div>
 
-<p class="foot">Model output for research, not financial advice. Built for the OKX.AI Genesis Hackathon · #OKXAI</p>
+<p class="foot">Model output for research, not financial advice. Built for the OKX.AI Genesis Hackathon.</p>
 </div>
 <script>
 async function run(){
-  const out=document.getElementById('out');out.textContent='pricing…';
+  const out=document.getElementById('out');out.textContent='pricing...';
   try{
     const r=await fetch('/fair-odds',{method:'POST',headers:{'content-type':'application/json'},
       body:JSON.stringify({home:document.getElementById('home').value,away:document.getElementById('away').value})});
     const j=await r.json();out.textContent=JSON.stringify(j,null,2);
-    if(j.reportUrl){out.textContent+='\\n\\n▶ shareable card: '+j.reportUrl;}
   }catch(e){out.textContent='error: '+e}
 }
 </script>

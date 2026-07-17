@@ -4,10 +4,10 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config.js";
-import { TOOL_LIST, type ToolDef } from "./tools.js";
+import { TOOL_LIST, TOOLS, type ToolDef } from "./tools.js";
 import { gate } from "./payment.js";
 import { handleMcp } from "./mcp.js";
-import { saveReport, getReport, renderReport } from "./report.js";
+import { encodeCard, decodeCard, renderCard } from "./card.js";
 import { landingPage } from "./landing.js";
 
 function paymentHeaderOf(headers: Record<string, unknown>): string | undefined {
@@ -72,15 +72,21 @@ export function buildServer(cfg: AppConfig): FastifyInstance {
     return res;
   });
 
-  // Shareable report card.
-  app.get("/r/:id", async (req, reply) => {
-    const id = (req.params as { id: string }).id;
-    const entry = getReport(id);
-    if (!entry) {
-      reply.code(404).type("text/html").send("<h1>Report not found or expired</h1>");
+  // Shareable card. Stateless: the payload encodes the input, so the card is
+  // reproducible from its link alone (works on serverless, and is verifiable).
+  app.get("/c/:payload", async (req, reply) => {
+    const payload = (req.params as { payload: string }).payload;
+    const decoded = decodeCard(payload);
+    if (!decoded || !TOOLS[decoded.k]) {
+      reply.code(404).type("text/html").send("<h1>Invalid card link</h1>");
       return;
     }
-    reply.type("text/html").send(renderReport(entry));
+    try {
+      const data = await TOOLS[decoded.k].handler(decoded.i);
+      reply.type("text/html").send(renderCard(decoded.k, data));
+    } catch {
+      reply.code(400).type("text/html").send("<h1>Could not render this card</h1>");
+    }
   });
 
   return app;
@@ -104,8 +110,8 @@ function registerToolRoute(app: FastifyInstance, cfg: AppConfig, tool: ToolDef):
 
     try {
       const data = await tool.handler(req.body ?? {});
-      const reportId = saveReport(tool.name, data);
-      return { ...(data as object), reportUrl: `${cfg.publicBaseUrl}/r/${reportId}` };
+      const cardUrl = `${cfg.publicBaseUrl}/c/${encodeCard(tool.name, req.body ?? {})}`;
+      return { ...(data as object), reportUrl: cardUrl };
     } catch (e) {
       if (e instanceof z.ZodError) {
         reply.code(400);

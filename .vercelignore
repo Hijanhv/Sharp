@@ -1,0 +1,8 @@
+test
+scripts
+docs
+.github
+.git
+*.log
+.vitest
+coverage

@@ -7,7 +7,7 @@ import {
   bttsProb,
   over25Prob,
 } from "../src/model/dixonColes.js";
-import { devig, kelly, scoreValue, impliedFromDecimal } from "../src/model/value.js";
+import { devig, kelly, scoreValue, impliedFromDecimal, hedgePlan } from "../src/model/value.js";
 
 describe("Poisson", () => {
   it("pmf sums to ~1 over a wide support", () => {
@@ -78,6 +78,21 @@ describe("value math", () => {
     expect(kelly(0.6, 2.0)).toBeGreaterThan(0);
     // model 40% vs 2.0 odds -> no edge
     expect(kelly(0.4, 2.0)).toBe(0);
+  });
+
+  it("hedgePlan detects an arbitrage and locks a positive ROI", () => {
+    // Odds that imply < 100% book -> arbitrage. 1/2.1 + 1/4.5 + 1/4.5 = 0.921 < 1
+    const arb = hedgePlan({ home: 2.1, draw: 4.5, away: 4.5 })!;
+    expect(arb.isArbitrage).toBe(true);
+    expect(arb.guaranteedRoiPct).toBeGreaterThan(0);
+    const split = (arb.stakeSplit.home ?? 0) + (arb.stakeSplit.draw ?? 0) + (arb.stakeSplit.away ?? 0);
+    expect(split).toBeCloseTo(1, 3); // stakes are a partition of the total
+  });
+
+  it("hedgePlan on a normal (vig) book locks a negative ROI (cost of certainty)", () => {
+    const h = hedgePlan({ home: 2.0, draw: 3.3, away: 3.6 })!; // book sum > 1
+    expect(h.isArbitrage).toBe(false);
+    expect(h.guaranteedRoiPct).toBeLessThan(0);
   });
 
   it("scoreValue flags a mispriced favourite as value", () => {

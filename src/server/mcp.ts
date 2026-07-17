@@ -4,7 +4,7 @@
 // with the REST routes via the TOOLS registry.
 import { z } from "zod";
 import { TOOL_LIST, TOOLS, type ToolKind } from "./tools.js";
-import { saveReport } from "./report.js";
+import { encodeCard } from "./card.js";
 
 const PROTOCOL_VERSION = "2025-06-18";
 const SERVER_INFO = { name: "sharp-asp", version: "0.1.0" };
@@ -70,8 +70,7 @@ async function handleOne(req: JsonRpcReq, publicBaseUrl: string): Promise<JsonRp
       if (!name || !TOOLS[name]) return err(req.id, -32602, `Unknown tool: ${name}`);
       try {
         const data = await TOOLS[name].handler(args);
-        const reportId = saveReport(name, data);
-        const reportUrl = `${publicBaseUrl}/r/${reportId}`;
+        const reportUrl = `${publicBaseUrl}/c/${encodeCard(name, args)}`;
         const payload = { ...(data as object), reportUrl };
         return ok(req.id, {
           content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
