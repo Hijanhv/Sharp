@@ -4,6 +4,8 @@
 
 **Live demo:** [sharp-rho.vercel.app](https://sharp-rho.vercel.app) &nbsp;·&nbsp; **On OKX.AI:** Agent `#6323` &nbsp;·&nbsp; **Track:** Finance Copilot &nbsp;·&nbsp; **Settles:** USDT0 on X Layer via x402
 
+**Demo thread:** [x.com/JanhaviChavada](https://x.com/JanhaviChavada/status/2078040771295596748)
+
 Fair odds and value edge for football and prediction markets, delivered as an Agent Service Provider (A2MCP) on [OKX.AI](https://www.okx.ai). Sharp prices a match with a calibrated statistical model, compares that price to the live market, and reports where the market is wrong. It returns fair probabilities, a value edge, a Kelly stake, and a hedge plan. Built for the [OKX.AI Genesis Hackathon](https://www.hackquest.io/hackathons/OKXAI-Genesis-Hackathon).
 
 ## The problem
