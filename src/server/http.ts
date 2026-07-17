@@ -35,6 +35,17 @@ export function buildServer(cfg: AppConfig): FastifyInstance {
     tools: TOOL_LIST.map((t) => ({ name: t.name, title: t.title, price_usdt: t.priceUsd, path: t.path, mcp: "/mcp" })),
   }));
 
+  // Free, ungated teaser for the public landing page. NOT a registered service —
+  // the paid A2MCP services are the /fair-odds, /value-scan, /slip routes below.
+  app.post("/demo", async (req, reply) => {
+    try {
+      return await TOOLS.fair_odds.handler(req.body ?? {});
+    } catch {
+      reply.code(400);
+      return { error: "invalid_input" };
+    }
+  });
+
   // One x402-gated REST route per tool.
   for (const tool of TOOL_LIST) registerToolRoute(app, cfg, tool);
 

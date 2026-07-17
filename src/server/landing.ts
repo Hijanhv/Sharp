@@ -204,7 +204,7 @@ async function run(){
   const res=document.getElementById('res');
   res.innerHTML='<p class="hint">pricing...</p>';
   try{
-    const r=await fetch('/fair-odds',{method:'POST',headers:{'content-type':'application/json'},
+    const r=await fetch('/demo',{method:'POST',headers:{'content-type':'application/json'},
       body:JSON.stringify({home:home.value,away:away.value})});
     const d=await r.json();
     const p=d.probs, o=d.fairOdds, s=d.topScores[0];
