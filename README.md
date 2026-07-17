@@ -105,6 +105,16 @@ Live and running in production, verified end to end:
 - Registered on OKX.AI as Agent `#6323` (Finance), running in **x402 paid mode**: `fair_odds`, `value_scan`, and `slip_builder` return a `402` challenge that settles in USDT0 on X Layer (chain 196).
 - 17 unit tests plus `npm run selfcheck` pass (model normalization, de-vig, Kelly, hedge, the three services, MCP discovery, and card rendering).
 
+### Settlement wallet
+
+Paid calls settle to the project's OKX Agentic Wallet on X Layer:
+
+```
+0x68cf8bfd4c5737be62dcfc3e4cfd7e9cea2ff016
+```
+
+This is an **OnchainOS Agentic Wallet**, not a browser-extension or seed-phrase wallet. Its private key is generated and held inside a **TEE (trusted execution environment)** and never leaves the enclave, so it cannot be exported or imported elsewhere. It is controlled through an email login via the OnchainOS agent, and it is the on-chain owner of Agent `#6323`. Every x402 challenge Sharp returns names this address as `payTo`, and payments settle to it in USDT0.
+
 ## Deploy
 
 The repo is configured for Vercel (`vercel.json` plus a serverless entry at `api/index.ts`) and connected to this GitHub repository, so every push to `main` deploys automatically. The public URL is detected from Vercel's environment, so no manual URL configuration is needed. `PAYMENT_MODE` defaults to `off` (every tool free); set it to `x402` with `PAYMENT_PAY_TO` to charge per call.
