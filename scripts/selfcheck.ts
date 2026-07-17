@@ -49,6 +49,14 @@ async function main(): Promise<void> {
   const mj: any = await m.json();
   check("MCP tools/list returns 3 tools", Array.isArray(mj.result?.tools) && mj.result.tools.length === 3);
 
+  // Stateless card with a long payload (value_scan) must not 414 (maxParamLength).
+  const cardPayload = Buffer.from(
+    JSON.stringify({ k: "value_scan", i: { home: "Argentina", away: "France", market: { decimalOdds: { home: 2.6, draw: 3.3, away: 3.0 } } } }),
+    "utf8",
+  ).toString("base64url");
+  const card = await fetch(`${base}/c/${cardPayload}`);
+  check("long value_scan card renders (no 414)", card.status === 200, `status ${card.status}`);
+
   await app.close();
   console.log(failures === 0 ? "\nAll self-checks passed." : `\n${failures} check(s) failed.`);
   process.exit(failures === 0 ? 0 : 1);

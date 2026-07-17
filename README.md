@@ -1,5 +1,9 @@
 # Sharp
 
+![Sharp: fair odds and value edge for prediction markets](assets/banner.png)
+
+**Live demo:** [sharp-rho.vercel.app](https://sharp-rho.vercel.app) &nbsp;·&nbsp; **On OKX.AI:** Agent `#6323` &nbsp;·&nbsp; **Track:** Finance Copilot &nbsp;·&nbsp; **Settles:** USDT0 on X Layer via x402
+
 Fair odds and value edge for football and prediction markets, delivered as an Agent Service Provider (A2MCP) on [OKX.AI](https://www.okx.ai). Sharp prices a match with a calibrated statistical model, compares that price to the live market, and reports where the market is wrong. It returns fair probabilities, a value edge, a Kelly stake, and a hedge plan. Built for the [OKX.AI Genesis Hackathon](https://www.hackquest.io/hackathons/OKXAI-Genesis-Hackathon).
 
 ## The problem
@@ -91,16 +95,26 @@ curl -s -X POST localhost:8787/fair-odds \
   -d '{"home":"Argentina","away":"France"}'
 ```
 
+## Status
+
+Live and running in production, verified end to end:
+
+- Deployed at [sharp-rho.vercel.app](https://sharp-rho.vercel.app), auto-deploying from `main`.
+- Registered on OKX.AI as Agent `#6323` (Finance), running in **x402 paid mode**: `fair_odds`, `value_scan`, and `slip_builder` return a `402` challenge that settles in USDT0 on X Layer (chain 196).
+- 17 unit tests plus `npm run selfcheck` pass (model normalization, de-vig, Kelly, hedge, the three services, MCP discovery, and card rendering).
+
 ## Deploy
 
-The repo is configured for Vercel (`vercel.json` plus a serverless entry at `api/index.ts`) and connected to this GitHub repository, so every push to `main` deploys automatically. The public URL is detected from Vercel's environment, so no manual URL configuration is needed. `PAYMENT_MODE` defaults to `off`, which serves every tool for free and lets the service go live immediately.
+The repo is configured for Vercel (`vercel.json` plus a serverless entry at `api/index.ts`) and connected to this GitHub repository, so every push to `main` deploys automatically. The public URL is detected from Vercel's environment, so no manual URL configuration is needed. `PAYMENT_MODE` defaults to `off` (every tool free); set it to `x402` with `PAYMENT_PAY_TO` to charge per call.
 
 ## Going live on OKX.AI
 
-1. In your agent, run `npx skills add okx/onchainos-skills --yes -g`, then log into the Agentic Wallet with your email. That wallet is your X Layer identity and receiving address.
-2. Register each service and list the ASP. In free mode it goes live right away.
+This ASP is already registered as Agent `#6323`. To reproduce the flow:
+
+1. Install the OnchainOS CLI, then in your agent run `npx skills add okx/onchainos-skills --yes -g` and log into the Agentic Wallet with your email. That wallet is your X Layer identity and receiving address.
+2. Register the identity and list the services (`agent create --role asp …`, then `agent activate`). In free mode it goes live right away.
 3. To charge, set `PAYMENT_MODE=x402` and `PAYMENT_PAY_TO` to your X Layer address. Paid calls then return an x402 challenge and settle in USDT0.
-4. Verify with `curl -i -X POST <url>/fair-odds`, which returns 200 with a result in free mode or 402 with a `PAYMENT-REQUIRED` header in x402 mode. Or run `npm run selfcheck`.
+4. Verify with `curl -i -X POST <url>/fair-odds` (200 in free mode, 402 with a `PAYMENT-REQUIRED` header in x402 mode), or run `npm run selfcheck`.
 
 Listing fields, the participation post, and a 90-second demo script are in [docs/okx-submission-kit.md](docs/okx-submission-kit.md).
 

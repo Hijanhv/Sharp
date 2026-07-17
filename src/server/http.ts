@@ -16,7 +16,9 @@ function paymentHeaderOf(headers: Record<string, unknown>): string | undefined {
 }
 
 export function buildServer(cfg: AppConfig): FastifyInstance {
-  const app = Fastify({ logger: false, bodyLimit: 256 * 1024 });
+  // maxParamLength lifted from Fastify's default of 100 so the stateless card
+  // payloads (base64 of the tool input) in /c/:payload are not rejected with 414.
+  const app = Fastify({ logger: false, bodyLimit: 256 * 1024, maxParamLength: 8000 });
 
   app.get("/health", async () => ({ ok: true, service: "sharp-asp", mode: cfg.payment.mode }));
 
